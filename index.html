@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Body Silhouette</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0f;
+    color: #f0ede8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.3px;
+    margin-bottom: 6px;
+    color: #f0ede8;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .stage {
+    position: relative;
+    width: 640px;
+    max-width: 100%;
+    aspect-ratio: 4/3;
+    background: #111;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #222;
+  }
+
+  video, canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+
+  video { display: none; }
+
+  #outputCanvas { display: block; }
+
+  .overlay-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #666;
+    font-size: 14px;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .overlay-msg svg {
+    width: 48px; height: 48px;
+    stroke: #444;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 20px;
+    width: 640px;
+    max-width: 100%;
+  }
+
+  .row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  button {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #1a1a1e;
+    color: #e0ddd8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  button:hover { background: #252528; border-color: #444; }
+  button:active { transform: scale(0.97); }
+
+  button.primary {
+    background: #2a6ef5;
+    border-color: #2a6ef5;
+    color: #fff;
+  }
+  button.primary:hover { background: #3a7eff; border-color: #3a7eff; }
+
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .label {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+  }
+
+  input[type="color"] {
+    -webkit-appearance: none;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid #333;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: #2a2a2e;
+    outline: none;
+    cursor: pointer;
+    min-width: 80px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #f0ede8;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  .value-label {
+    font-size: 12px;
+    color: #888;
+    min-width: 32px;
+    text-align: right;
+  }
+
+  .swatch-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.1s;
+  }
+
+  .swatch:hover { transform: scale(1.15); }
+  .swatch.active { border-color: #fff; }
+
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #2a6ef5;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .step-text {
+    font-size: 12px;
+    color: #888;
+  }
+
+  .status-bar {
+    font-size: 12px;
+    color: #555;
+    margin-top: 12px;
+    text-align: center;
+    height: 16px;
+    transition: color 0.3s;
+  }
+
+  .status-bar.active { color: #2a6ef5; }
+  .status-bar.ok { color: #3a9e6a; }
+
+  .countdown {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 96px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 40px rgba(0,0,0,0.8);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+</style>
+</head>
+<body>
+
+<h1>Body Silhouette</h1>
+<p class="subtitle">Step away from the camera, capture background, then stand in frame.</p>
+
+<div class="stage" id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="bgCanvas" style="display:none"></canvas>
+  <canvas id="outputCanvas"></canvas>
+  <div class="overlay-msg" id="overlayMsg">
+    <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    Click "Start camera" to begin
+  </div>
+  <div class="countdown" id="countdown"></div>
+</div>
+
+<div class="controls">
+
+  <div class="row">
+    <button class="primary" id="btnStart">Start camera</button>
+    <button id="btnCapture" disabled>
+      Capture background (3s)
+    </button>
+    <span class="step-text" id="stepHint">
+      <span class="step-badge">1</span> Start the camera first
+    </span>
+  </div>
+
+  <div class="row" style="gap:16px;">
+    <span class="label">Silhouette color</span>
+    <div class="swatch-row" id="swatchRow">
+      <div class="swatch active" style="background:#ffffff" data-color="#ffffff"></div>
+      <div class="swatch" style="background:#ff4d6d" data-color="#ff4d6d"></div>
+      <div class="swatch" style="background:#ffd60a" data-color="#ffd60a"></div>
+      <div class="swatch" style="background:#06d6a0" data-color="#06d6a0"></div>
+      <div class="swatch" style="background:#4cc9f0" data-color="#4cc9f0"></div>
+      <div class="swatch" style="background:#7b2ff7" data-color="#7b2ff7"></div>
+      <div class="swatch" style="background:#ff6b35" data-color="#ff6b35"></div>
+      <input type="color" id="colorPicker" value="#ffffff" title="Custom color">
+    </div>
+  </div>
+
+  <div class="row">
+    <span class="label">Sensitivity</span>
+    <input type="range" id="threshold" min="10" max="80" value="30" step="1">
+    <span class="value-label" id="thresholdVal">30</span>
+    <span class="label" style="margin-left:16px;">Opacity</span>
+    <input type="range" id="opacity" min="0.3" max="1" value="1" step="0.05">
+    <span class="value-label" id="opacityVal">100%</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Edge softness</span>
+    <input type="range" id="feather" min="0" max="10" value="2" step="1">
+    <span class="value-label" id="featherVal">2</span>
+    <span class="label" style="margin-left:16px;">Show original</span>
+    <input type="range" id="blend" min="0" max="1" value="0" step="0.05">
+    <span class="value-label" id="blendVal">0%</span>
+  </div>
+
+</div>
+
+<div class="status-bar" id="statusBar">Waiting for camera…</div>
+
+<script>
+const video = document.getElementById('video');
+const bgCanvas = document.getElementById('bgCanvas');
+const outputCanvas = document.getElementById('outputCanvas');
+const btnStart = document.getElementById('btnStart');
+const btnCapture = document.getElementById('btnCapture');
+const overlayMsg = document.getElementById('overlayMsg');
+const countdown = document.getElementById('countdown');
+const statusBar = document.getElementById('statusBar');
+const stepHint = document.getElementById('stepHint');
+const colorPicker = document.getElementById('colorPicker');
+const thresholdSlider = document.getElementById('threshold');
+const opacitySlider = document.getElementById('opacity');
+const featherSlider = document.getElementById('feather');
+const blendSlider = document.getElementById('blend');
+
+const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+const outCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
+
+let bgImageData = null;
+let animFrame = null;
+let silhouetteColor = [255, 255, 255];
+let running = false;
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+
+function setColor(hex) {
+  silhouetteColor = hexToRgb(hex);
+  colorPicker.value = hex;
+  document.querySelectorAll('.swatch').forEach(s => {
+    s.classList.toggle('active', s.dataset.color === hex);
+  });
+}
+
+document.querySelectorAll('.swatch').forEach(s => {
+  s.addEventListener('click', () => setColor(s.dataset.color));
+});
+
+colorPicker.addEventListener('input', () => {
+  setColor(colorPicker.value);
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+});
+
+thresholdSlider.addEventListener('input', () => {
+  document.getElementById('thresholdVal').textContent = thresholdSlider.value;
+});
+opacitySlider.addEventListener('input', () => {
+  document.getElementById('opacityVal').textContent = Math.round(opacitySlider.value * 100) + '%';
+});
+featherSlider.addEventListener('input', () => {
+  document.getElementById('featherVal').textContent = featherSlider.value;
+});
+blendSlider.addEventListener('input', () => {
+  document.getElementById('blendVal').textContent = Math.round(blendSlider.value * 100) + '%';
+});
+
+btnStart.addEventListener('click', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+
+    video.addEventListener('loadedmetadata', () => {
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      bgCanvas.width = w;
+      bgCanvas.height = h;
+      outputCanvas.width = w;
+      outputCanvas.height = h;
+    }, { once: true });
+
+    btnStart.disabled = true;
+    btnCapture.disabled = false;
+    overlayMsg.style.opacity = '0';
+    overlayMsg.style.pointerEvents = 'none';
+
+    setStatus('Camera ready. Step out of frame, then click "Capture background".', 'active');
+    stepHint.innerHTML = '<span class="step-badge">2</span> Step out of frame, then capture background';
+
+    running = true;
+    renderLoop();
+  } catch(e) {
+    setStatus('Camera access denied or unavailable.', '');
+    console.error(e);
+  }
+});
+
+btnCapture.addEventListener('click', () => {
+  btnCapture.disabled = true;
+  let count = 3;
+  countdown.textContent = count;
+  countdown.style.opacity = '1';
+  setStatus('Stand clear…', 'active');
+
+  const tick = setInterval(() => {
+    count--;
+    if (count > 0) {
+      countdown.textContent = count;
+    } else {
+      clearInterval(tick);
+      countdown.style.opacity = '0';
+      captureBackground();
+    }
+  }, 1000);
+});
+
+function captureBackground() {
+  const w = bgCanvas.width;
+  const h = bgCanvas.height;
+  bgCtx.save();
+  bgCtx.translate(w, 0);
+  bgCtx.scale(-1, 1);
+  bgCtx.drawImage(video, 0, 0, w, h);
+  bgCtx.restore();
+  bgImageData = bgCtx.getImageData(0, 0, w, h);
+  btnCapture.disabled = false;
+  setStatus('Background captured! Step into frame.', 'ok');
+  stepHint.innerHTML = '<span class="step-badge">3</span> Step into frame — your silhouette will appear';
+}
+
+function renderLoop() {
+  if (!running) return;
+
+  const w = outputCanvas.width;
+  const h = outputCanvas.height;
+
+  if (!w || !h) { animFrame = requestAnimationFrame(renderLoop); return; }
+
+  outCtx.save();
+  outCtx.translate(w, 0);
+  outCtx.scale(-1, 1);
+  outCtx.drawImage(video, 0, 0, w, h);
+  outCtx.restore();
+
+  const currentData = outCtx.getImageData(0, 0, w, h);
+
+  if (bgImageData) {
+    const threshold = parseInt(thresholdSlider.value);
+    const alpha = parseFloat(opacitySlider.value);
+    const feather = parseInt(featherSlider.value);
+    const blendAmt = parseFloat(blendSlider.value);
+    const [sr, sg, sb] = silhouetteColor;
+
+    const cur = currentData.data;
+    const bg = bgImageData.data;
+    const len = cur.length;
+
+    for (let i = 0; i < len; i += 4) {
+      const dr = Math.abs(cur[i]   - bg[i]);
+      const dg = Math.abs(cur[i+1] - bg[i+1]);
+      const db = Math.abs(cur[i+2] - bg[i+2]);
+      const diff = (dr + dg + db) / 3;
+
+      let mask = 0;
+      if (feather > 0) {
+        const low = threshold - feather * 3;
+        const high = threshold + feather * 3;
+        if (diff >= high) mask = 1;
+        else if (diff > low) mask = (diff - low) / (high - low);
+      } else {
+        mask = diff > threshold ? 1 : 0;
+      }
+
+      if (mask > 0) {
+        const inv = 1 - blendAmt;
+        cur[i]   = Math.round(sr * (1 - blendAmt * (1-mask)) + cur[i] * blendAmt * (1-mask) * inv);
+        cur[i+1] = Math.round(sg * (1 - blendAmt * (1-mask)) + cur[i+1] * blendAmt * (1-mask) * inv);
+        cur[i+2] = Math.round(sb * (1 - blendAmt * (1-mask)) + cur[i+2] * blendAmt * (1-mask) * inv);
+        cur[i+3] = Math.round(255 * alpha * mask + cur[i+3] * (1 - mask));
+      } else {
+        cur[i+3] = 0;
+      }
+    }
+
+    outCtx.fillStyle = '#0d0d0f';
+    outCtx.fillRect(0, 0, w, h);
+    outCtx.putImageData(currentData, 0, 0);
+  }
+
+  animFrame = requestAnimationFrame(renderLoop);
+}
+
+function setStatus(msg, cls) {
+  statusBar.textContent = msg;
+  statusBar.className = 'status-bar' + (cls ? ' ' + cls : '');
+}
+</script>
+</body>
+</html>
